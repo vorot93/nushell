@@ -1,6 +1,6 @@
 use crate::parser::hir::syntax_shape::{
     expand_syntax, expression::expand_file_path, parse_single_node, BarePathShape,
-    BarePatternShape, ExpandContext, UnitShape,
+    BarePatternShape, ExpandContext, UnitShape, UnitSyntax,
 };
 use crate::parser::{
     hir,
@@ -298,6 +298,80 @@ impl<'tokens> SpannedAtomicToken<'tokens> {
     }
 }
 
+impl PrettyDebugWithSource for SpannedAtomicToken<'_> {
+    fn pretty_debug(&self, source: &str) -> DebugDocBuilder {
+        fn atom(value: DebugDocBuilder) -> DebugDocBuilder {
+            b::delimit("(", b::kind("atom") + b::space() + value.group(), ")").group()
+        }
+
+        fn atom_kind(kind: impl std::fmt::Display, value: DebugDocBuilder) -> DebugDocBuilder {
+            b::delimit(
+                "(",
+                (b::kind("atom") + b::delimit("[", b::kind(kind), "]")).group()
+                    + b::space()
+                    + value.group(),
+                ")",
+            )
+            .group()
+        }
+
+        atom(match &self.item {
+            AtomicToken::Eof { .. } => b::description("eof"),
+            AtomicToken::Error { .. } => b::error("error"),
+            AtomicToken::Number { number } => number.pretty_debug(source),
+            AtomicToken::Size { number, unit } => {
+                number.pretty_debug(source) + b::keyword(unit.span.slice(source))
+            }
+            AtomicToken::String { body } => b::primitive(body.slice(source)),
+            AtomicToken::ItVariable { .. } | AtomicToken::Variable { .. } => {
+                b::keyword(self.span.slice(source))
+            }
+            AtomicToken::ExternalCommand { .. } => b::primitive(self.span.slice(source)),
+            AtomicToken::ExternalWord { text } => {
+                atom_kind("external word", b::primitive(text.slice(source)))
+            }
+            AtomicToken::GlobPattern { pattern } => {
+                atom_kind("pattern", b::primitive(pattern.slice(source)))
+            }
+            AtomicToken::FilePath { path } => {
+                atom_kind("file path", b::primitive(path.slice(source)))
+            }
+            AtomicToken::Word { text } => atom_kind("word", b::primitive(text.slice(source))),
+            AtomicToken::SquareDelimited { nodes, .. } => b::delimit(
+                "[",
+                b::intersperse_with_source(nodes.iter(), b::space(), source),
+                "]",
+            ),
+            AtomicToken::ParenDelimited { nodes, .. } => b::delimit(
+                "(",
+                b::intersperse_with_source(nodes.iter(), b::space(), source),
+                ")",
+            ),
+            AtomicToken::BraceDelimited { nodes, .. } => b::delimit(
+                "{",
+                b::intersperse_with_source(nodes.iter(), b::space(), source),
+                "}",
+            ),
+            AtomicToken::Pipeline { elements, .. } => atom_kind(
+                "pipeline",
+                b::intersperse_with_source(elements.iter(), b::space(), source),
+            ),
+            AtomicToken::ShorthandFlag { name } => {
+                atom_kind("shorthand flag", b::key(name.slice(source)))
+            }
+            AtomicToken::LonghandFlag { name } => {
+                atom_kind("longhand flag", b::key(name.slice(source)))
+            }
+            AtomicToken::Dot { .. } => atom(b::kind("dot")),
+            AtomicToken::Operator { text } => atom_kind("operator", b::keyword(text.slice(source))),
+            AtomicToken::Whitespace { text } => atom_kind(
+                "whitespace",
+                b::description(format!("{:?}", text.slice(source))),
+            ),
+        })
+    }
+}
+
 #[derive(Debug)]
 pub enum WhitespaceHandling {
     #[allow(unused)]
@@ -420,47 +494,6 @@ impl ExpansionRule {
     }
 }
 
-impl<'content> FormatDebug for SpannedAtomicToken<'content> {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> std::fmt::Result {
-        match &self.item {
-            AtomicToken::Eof { .. } => f.say_str("atomic", "eof"),
-            AtomicToken::Error { .. } => f.say_str("atomic", "error"),
-            AtomicToken::Number { number } => {
-                f.say_str("atomic", format!("{}", number.debug(source)))
-            }
-            AtomicToken::Size { number, unit } => f.say_str(
-                "atomic size",
-                format!("{}{}", number.debug(source), unit.debug(source)),
-            ),
-            AtomicToken::String { body } => f.say_str("atomic string", body.slice(source)),
-            AtomicToken::ItVariable { name } => f.say_str("atomic it", name.slice(source)),
-            AtomicToken::Variable { name } => f.say_str("atomic variable", name.slice(source)),
-            AtomicToken::ExternalCommand { command } => {
-                f.say_str("atomic external command", command.slice(source))
-            }
-            AtomicToken::ExternalWord { text } => {
-                f.say_str("atomic external word", text.slice(source))
-            }
-            AtomicToken::GlobPattern { pattern } => f.say_str("atomic glob", pattern.slice(source)),
-            AtomicToken::FilePath { path } => f.say_str("atomic path", path.slice(source)),
-            AtomicToken::Word { text } => f.say_str("word", text.slice(source)),
-            AtomicToken::SquareDelimited { .. } => f.say_simple("atomic square"),
-            AtomicToken::ParenDelimited { .. } => f.say_simple("atomic paren"),
-            AtomicToken::BraceDelimited { .. } => f.say_simple("atomic brace"),
-            AtomicToken::Pipeline { .. } => f.say_simple("atomic pipeline"),
-            AtomicToken::ShorthandFlag { name } => {
-                f.say_str("atomic shorthand", name.slice(source))
-            }
-            AtomicToken::LonghandFlag { name } => f.say_str("atomic longhand", name.slice(source)),
-            AtomicToken::Dot { .. } => f.say_simple("atomic dot"),
-            AtomicToken::Operator { text } => f.say_str("atomic operator", text.slice(source)),
-            AtomicToken::Whitespace { text } => {
-                f.say_str("atomic whitespace", &format!("{:?}", text.slice(source)))
-            }
-        }
-    }
-}
-
 pub fn expand_atom<'me, 'content>(
     token_nodes: &'me mut TokensIterator<'content>,
     expected: &'static str,
@@ -473,7 +506,7 @@ pub fn expand_atom<'me, 'content>(
 
     token_nodes.with_expand_tracer(|_, tracer| match &result {
         Ok(result) => {
-            tracer.add_result(Box::new(format!("{}", result.debug(context.source))));
+            tracer.add_result(result.clone());
             tracer.success();
         }
 
@@ -516,9 +549,12 @@ fn expand_atom_inner<'me, 'content>(
             Err(_) => {}
 
             // But if it was a valid unit, we're done here
-            Ok(Spanned {
-                item: (number, unit),
-                span,
+            Ok(UnitSyntax {
+                unit:
+                    Spanned {
+                        item: (number, unit),
+                        span,
+                    },
             }) => return Ok(AtomicToken::Size { number, unit }.spanned(span)),
         },
     }

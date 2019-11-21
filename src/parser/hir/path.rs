@@ -15,7 +15,7 @@ pub enum RawPathMember {
 pub type PathMember = Spanned<RawPathMember>;
 
 impl PrettyDebug for &PathMember {
-    fn pretty_debug(&self) -> DebugDocBuilder {
+    fn pretty(&self) -> DebugDocBuilder {
         match &self.item {
             RawPathMember::String(string) => b::primitive(format!("{:?}", string)),
             RawPathMember::Int(int) => b::primitive(format!("{}", int)),
@@ -42,12 +42,9 @@ impl ColumnPath {
 }
 
 impl PrettyDebug for ColumnPath {
-    fn pretty_debug(&self) -> DebugDocBuilder {
-        let members: Vec<DebugDocBuilder> = self
-            .members
-            .iter()
-            .map(|member| member.pretty_debug())
-            .collect();
+    fn pretty(&self) -> DebugDocBuilder {
+        let members: Vec<DebugDocBuilder> =
+            self.members.iter().map(|member| member.pretty()).collect();
 
         b::delimit(
             "(",
@@ -55,12 +52,6 @@ impl PrettyDebug for ColumnPath {
             ")",
         )
         .nest()
-    }
-}
-
-impl FormatDebug for ColumnPath {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
-        self.members.fmt_debug(f, source)
     }
 }
 
@@ -93,15 +84,6 @@ impl PathMember {
     }
 }
 
-impl FormatDebug for PathMember {
-    fn fmt_debug(&self, f: &mut DebugFormatter, _source: &str) -> fmt::Result {
-        match &self.item {
-            RawPathMember::String(string) => f.say_str("member", &string),
-            RawPathMember::Int(int) => f.say_block("member", |f| write!(f, "{}", int)),
-        }
-    }
-}
-
 #[derive(
     Debug,
     Clone,
@@ -123,6 +105,14 @@ pub struct Path {
     tail: Vec<PathMember>,
 }
 
+impl PrettyDebugWithSource for Path {
+    fn pretty_debug(&self, source: &str) -> DebugDocBuilder {
+        self.head.pretty_debug(source)
+            + b::operator(".")
+            + b::intersperse(self.tail.iter().map(|m| m.pretty()), b::operator("."))
+    }
+}
+
 impl fmt::Display for Path {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.head)?;
@@ -138,17 +128,5 @@ impl fmt::Display for Path {
 impl Path {
     pub(crate) fn parts(self) -> (Expression, Vec<PathMember>) {
         (self.head, self.tail)
-    }
-}
-
-impl FormatDebug for Path {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
-        write!(f, "{}", self.head.debug(source))?;
-
-        for part in &self.tail {
-            write!(f, ".{}", part.item)?;
-        }
-
-        Ok(())
     }
 }

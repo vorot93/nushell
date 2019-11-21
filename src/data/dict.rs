@@ -21,31 +21,13 @@ struct DebugEntry<'a> {
 }
 
 impl<'a> PrettyDebug for DebugEntry<'a> {
-    fn pretty_debug(&self) -> DebugDocBuilder {
-        (b::key(self.key.to_string()) + b::equals() + self.value.item.pretty_debug().as_value())
-            .group()
-        // BoxAllocator
-        //     .text(self.key.to_string())
-        //     .annotate(ShellAnnotation::style("key"))
-        //     .append(
-        //         BoxAllocator
-        //             .text("=")
-        //             .annotate(ShellAnnotation::style("equals")),
-        //     )
-        //     .append({
-        //         self.value
-        //             .item
-        //             .pretty_debug()
-        //             .inner
-        //             .annotate(ShellAnnotation::style("value"))
-        //     })
-        //     .group()
-        //     .into()
+    fn pretty(&self) -> DebugDocBuilder {
+        (b::key(self.key.to_string()) + b::equals() + self.value.item.pretty().as_value()).group()
     }
 }
 
 impl PrettyDebug for Dictionary {
-    fn pretty_debug(&self) -> DebugDocBuilder {
+    fn pretty(&self) -> DebugDocBuilder {
         BoxAllocator
             .text("(")
             .append(

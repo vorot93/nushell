@@ -57,14 +57,14 @@ pub fn get_column_path(
                         .iter()
                         .nth_back(if fields.members().len() > 2 { 1 } else { 0 })
                     {
-                        Some(last_field) => last_field.span(),
-                        None => column_path_tried.span(),
+                        Some(last_field) => last_field.span,
+                        None => column_path_tried.span,
                     };
 
                     return ShellError::labeled_error_with_secondary(
                         "Row not found",
                         format!("There isn't a row indexed at {}", **column_path_tried),
-                        column_path_tried.span(),
+                        column_path_tried.span,
                         if total == 1 {
                             format!("The table only has 1 row")
                         } else {
@@ -81,7 +81,7 @@ pub fn get_column_path(
                     return ShellError::labeled_error(
                         "Unknown column",
                         format!("did you mean '{}'?", suggestions[0].1),
-                        span_for_spanned_list(fields.members().iter().map(|p| p.span())),
+                        span_for_spanned_list(fields.members().iter().map(|p| p.span)),
                     )
                 }
                 None => {}

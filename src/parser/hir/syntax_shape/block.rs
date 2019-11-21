@@ -7,7 +7,7 @@ use crate::parser::{
         color_fallible_syntax, color_syntax_with, continue_expression, expand_expr, expand_syntax,
         DelimitedShape, ExpandContext, ExpandExpression, ExpressionContinuationShape,
         ExpressionListShape, FallibleColorSyntax, MemberShape, ParseError, PathTailShape,
-        VariablePathShape,
+        PathTailSyntax, VariablePathShape,
     },
     hir::tokens_iterator::TokensIterator,
     parse::token_tree::Delimiter,
@@ -89,7 +89,7 @@ impl FallibleColorSyntax for AnyBlockShape {
         match block {
             // If so, color it as a block
             Some((children, spans)) => {
-                token_nodes.child(children, |token_nodes| {
+                token_nodes.child(children, context.source.clone(), |token_nodes| {
                     color_syntax_with(
                         &DelimitedShape,
                         &(Delimiter::Brace, spans.0, spans.1),
@@ -125,9 +125,10 @@ impl ExpandExpression for AnyBlockShape {
 
         match block {
             Some((block, _tags)) => {
-                let mut iterator = TokensIterator::new(&block.item, block.span, false);
+                let mut iterator =
+                    TokensIterator::new(&block.item, block.span, context.source.clone(), false);
 
-                let exprs = expand_syntax(&ExpressionListShape, &mut iterator, context)?;
+                let exprs = expand_syntax(&ExpressionListShape, &mut iterator, context)?.exprs;
 
                 return Ok(hir::RawExpression::Block(exprs.item).spanned(block.span));
             }
@@ -351,7 +352,9 @@ impl ExpandExpression for ShorthandPath {
 
         match tail {
             Err(_) => return Ok(head),
-            Ok(Spanned { item: tail, .. }) => {
+            Ok(PathTailSyntax {
+                tail: Spanned { item: tail, .. },
+            }) => {
                 // For each member that `PathTailShape` expanded, join it onto the existing expression
                 // to form a new path
                 for member in tail {

@@ -95,6 +95,9 @@ ptree = {version = "0.2" }
 image = { version = "0.22.2", default_features = false, features = ["png_codec", "jpeg"], optional = true }
 starship = { version = "0.26.4", optional = true}
 
+[workspace]
+
+members = []
 
 [features]
 default = ["textview", "sys", "ps"]

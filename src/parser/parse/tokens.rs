@@ -37,11 +37,11 @@ pub enum RawNumber {
     Decimal(Span),
 }
 
-impl FormatDebug for RawNumber {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
+impl PrettyDebugWithSource for RawNumber {
+    fn pretty_debug(&self, source: &str) -> DebugDocBuilder {
         match self {
-            RawNumber::Int(span) => f.say_str("int", span.slice(source)),
-            RawNumber::Decimal(span) => f.say_str("decimal", span.slice(source)),
+            RawNumber::Int(span) => b::primitive(span.slice(source)),
+            RawNumber::Decimal(span) => b::primitive(span.slice(source)),
         }
     }
 }
@@ -70,6 +70,21 @@ impl RawNumber {
 }
 
 pub type Token = Spanned<RawToken>;
+
+impl PrettyDebugWithSource for Token {
+    fn pretty_debug(&self, source: &str) -> DebugDocBuilder {
+        match self.item {
+            RawToken::Number(number) => number.pretty_debug(source),
+            RawToken::Operator(operator) => operator.pretty(),
+            RawToken::String(_) => b::primitive(self.span.slice(source)),
+            RawToken::Variable(_) => b::var(self.span.slice(source)),
+            RawToken::ExternalCommand(_) => b::primitive(self.span.slice(source)),
+            RawToken::ExternalWord => b::typed("external", b::description(self.span.slice(source))),
+            RawToken::GlobPattern => b::typed("pattern", b::description(self.span.slice(source))),
+            RawToken::Bare => b::primitive(self.span.slice(source)),
+        }
+    }
+}
 
 impl Token {
     pub fn debug<'a>(&self, source: &'a Text) -> DebugToken<'a> {

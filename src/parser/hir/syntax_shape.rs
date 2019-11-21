@@ -16,7 +16,6 @@ use crate::prelude::*;
 use derive_new::new;
 use getset::Getters;
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use std::path::{Path, PathBuf};
 
 pub(crate) use self::expression::atom::{expand_atom, AtomicToken, ExpansionRule};
@@ -28,10 +27,11 @@ pub(crate) use self::expression::list::{BackoffColoringMode, ExpressionListShape
 pub(crate) use self::expression::number::{IntShape, NumberShape};
 pub(crate) use self::expression::pattern::{BarePatternShape, PatternShape};
 pub(crate) use self::expression::string::StringShape;
-pub(crate) use self::expression::unit::UnitShape;
+pub(crate) use self::expression::unit::{UnitShape, UnitSyntax};
 pub(crate) use self::expression::variable_path::{
     ColorableDotShape, ColumnPathShape, DotShape, ExpressionContinuation,
-    ExpressionContinuationShape, Member, MemberShape, PathTailShape, VariablePathShape,
+    ExpressionContinuationShape, Member, MemberShape, PathTailShape, PathTailSyntax,
+    VariablePathShape,
 };
 pub(crate) use self::expression::{continue_expression, AnyExpressionShape};
 pub(crate) use self::flat_shape::FlatShape;
@@ -54,6 +54,22 @@ pub enum SyntaxShape {
     Path,
     Pattern,
     Block,
+}
+
+impl PrettyDebug for SyntaxShape {
+    fn pretty(&self) -> DebugDocBuilder {
+        b::kind(match self {
+            SyntaxShape::Any => "any shape",
+            SyntaxShape::String => "string shape",
+            SyntaxShape::Member => "member shape",
+            SyntaxShape::ColumnPath => "column path shape",
+            SyntaxShape::Number => "number shape",
+            SyntaxShape::Int => "integer shape",
+            SyntaxShape::Path => "file path shape",
+            SyntaxShape::Pattern => "pattern shape",
+            SyntaxShape::Block => "block shape",
+        })
+    }
 }
 
 #[cfg(not(coloring_in_tokens))]
@@ -164,7 +180,7 @@ impl ExpandExpression for SyntaxShape {
                 Ok(syntax.to_expr())
             }
             SyntaxShape::ColumnPath => {
-                let column_path = expand_syntax(&ColumnPathShape, token_nodes, context)?;
+                let column_path = expand_syntax(&ColumnPathShape, token_nodes, context)?.path;
                 let Tagged {
                     item: column_path,
                     tag,
@@ -677,8 +693,25 @@ impl FallibleColorSyntax for BareShape {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct BareSyntax {
+    pub word: Spanned<String>,
+}
+
+impl HasSpan for BareSyntax {
+    fn span(&self) -> Span {
+        self.word.span
+    }
+}
+
+impl PrettyDebug for BareSyntax {
+    fn pretty(&self) -> DebugDocBuilder {
+        b::primitive(&self.word.item)
+    }
+}
+
 impl ExpandSyntax for BareShape {
-    type Output = Spanned<String>;
+    type Output = BareSyntax;
 
     fn name(&self) -> &'static str {
         "word"
@@ -697,7 +730,9 @@ impl ExpandSyntax for BareShape {
                 span,
             }) => {
                 peeked.commit();
-                Ok(span.spanned_string(context.source))
+                Ok(BareSyntax {
+                    word: span.spanned_string(context.source),
+                })
             }
 
             other => Err(ParseError::mismatch(
@@ -731,19 +766,20 @@ pub enum CommandSignature {
     Expression(hir::Expression),
 }
 
-impl FormatDebug for CommandSignature {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
+impl PrettyDebugWithSource for CommandSignature {
+    fn pretty_debug(&self, source: &str) -> DebugDocBuilder {
         match self {
             CommandSignature::Internal(internal) => {
-                f.say_str("internal", internal.span.slice(source))
+                b::typed("command", b::description(internal.name()))
             }
             CommandSignature::LiteralExternal { outer, .. } => {
-                f.say_str("external", outer.slice(source))
+                b::typed("command", b::description(outer.slice(source)))
             }
-            CommandSignature::External(external) => {
-                write!(f, "external:{}", external.slice(source))
-            }
-            CommandSignature::Expression(expr) => expr.fmt_debug(f, source),
+            CommandSignature::External(external) => b::typed(
+                "command",
+                b::description("^") + b::description(external.slice(source)),
+            ),
+            CommandSignature::Expression(expr) => b::typed("command", expr.pretty_debug(source)),
         }
     }
 }
@@ -846,7 +882,7 @@ impl FallibleColorSyntax for PipelineShape {
 
             let tokens: Spanned<&[TokenNode]> = (&part.item.tokens[..]).spanned(part.span);
 
-            token_nodes.child(tokens, move |token_nodes| {
+            token_nodes.child(tokens, context.source.clone(), move |token_nodes| {
                 color_syntax(&MaybeSpaceShape, token_nodes, context);
                 color_syntax(&CommandShape, token_nodes, context);
             });
@@ -881,9 +917,10 @@ impl ExpandSyntax for PipelineShape {
         for part in parts {
             let tokens: Spanned<&[TokenNode]> = (&part.item.tokens[..]).spanned(part.span);
 
-            let classified = iterator.child(tokens, move |token_nodes| {
-                expand_syntax(&ClassifiedCommandShape, token_nodes, context)
-            })?;
+            let classified =
+                iterator.child(tokens, context.source.clone(), move |token_nodes| {
+                    expand_syntax(&ClassifiedCommandShape, token_nodes, context)
+                })?;
 
             out.push(classified);
         }

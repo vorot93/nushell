@@ -1,23 +1,14 @@
 use crate::parser::TokenNode;
-use crate::{DebugFormatter, FormatDebug, Span, Spanned, ToDebug};
+use crate::prelude::*;
+use crate::traits::{DebugDocBuilder, PrettyDebugWithSource};
+use crate::{Span, Spanned};
 use derive_new::new;
 use getset::Getters;
-use itertools::Itertools;
-use std::fmt::{self, Write};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Getters, new)]
 pub struct Pipeline {
     #[get = "pub"]
     pub(crate) parts: Vec<Spanned<PipelineElement>>,
-}
-
-impl FormatDebug for Pipeline {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
-        f.say_str(
-            "pipeline",
-            self.parts.iter().map(|p| p.debug(source)).join(" "),
-        )
-    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Getters, new)]
@@ -27,16 +18,23 @@ pub struct PipelineElement {
     pub tokens: Spanned<Vec<TokenNode>>,
 }
 
-impl FormatDebug for PipelineElement {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
-        if let Some(pipe) = self.pipe {
-            write!(f, "{}", pipe.slice(source))?;
-        }
+impl PrettyDebugWithSource for Spanned<Pipeline> {
+    fn pretty_debug(&self, source: &str) -> DebugDocBuilder {
+        b::intersperse(
+            self.parts.iter().map(|token| token.pretty_debug(source)),
+            b::operator(" | "),
+        )
+    }
+}
 
-        for token in &self.tokens.item {
-            write!(f, "{}", token.debug(source))?;
-        }
-
-        Ok(())
+impl PrettyDebugWithSource for Spanned<PipelineElement> {
+    fn pretty_debug(&self, source: &str) -> DebugDocBuilder {
+        b::intersperse(
+            self.tokens.iter().map(|token| match token {
+                TokenNode::Whitespace(_) => b::blank(),
+                token => token.pretty_debug(source),
+            }),
+            b::space(),
+        )
     }
 }

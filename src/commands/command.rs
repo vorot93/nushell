@@ -7,7 +7,6 @@ use crate::prelude::*;
 use derive_new::new;
 use getset::Getters;
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
@@ -17,12 +16,6 @@ pub struct UnevaluatedCallInfo {
     pub args: hir::Call,
     pub source: Text,
     pub name_tag: Tag,
-}
-
-impl FormatDebug for UnevaluatedCallInfo {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
-        self.args.fmt_debug(f, source)
-    }
 }
 
 impl UnevaluatedCallInfo {
@@ -103,12 +96,6 @@ impl RawCommandArgs {
 impl std::fmt::Debug for CommandArgs {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.call_info.fmt(f)
-    }
-}
-
-impl FormatDebug for CommandArgs {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
-        self.call_info.fmt_debug(f, source)
     }
 }
 
@@ -409,22 +396,18 @@ pub enum CommandAction {
     LeaveShell,
 }
 
-impl FormatDebug for CommandAction {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
+impl PrettyDebug for CommandAction {
+    fn pretty(&self) -> DebugDocBuilder {
         match self {
-            CommandAction::ChangePath(s) => write!(f, "action:change-path={}", s),
-            CommandAction::Exit => write!(f, "action:exit"),
-            CommandAction::Error(_) => write!(f, "action:error"),
-            CommandAction::EnterShell(s) => write!(f, "action:enter-shell={}", s),
-            CommandAction::EnterValueShell(t) => {
-                write!(f, "action:enter-value-shell={}", t.debug(source))
-            }
-            CommandAction::EnterHelpShell(t) => {
-                write!(f, "action:enter-help-shell={}", t.debug(source))
-            }
-            CommandAction::PreviousShell => write!(f, "action:previous-shell"),
-            CommandAction::NextShell => write!(f, "action:next-shell"),
-            CommandAction::LeaveShell => write!(f, "action:leave-shell"),
+            CommandAction::ChangePath(path) => b::typed("change path", b::description(path)),
+            CommandAction::Exit => b::description("exit"),
+            CommandAction::Error(_) => b::error("error"),
+            CommandAction::EnterShell(s) => b::typed("enter shell", b::description(s)),
+            CommandAction::EnterValueShell(v) => b::typed("enter value shell", v.pretty()),
+            CommandAction::EnterHelpShell(v) => b::typed("enter help shell", v.pretty()),
+            CommandAction::PreviousShell => b::description("previous shell"),
+            CommandAction::NextShell => b::description("next shell"),
+            CommandAction::LeaveShell => b::description("leave shell"),
         }
     }
 }
@@ -436,15 +419,23 @@ pub enum ReturnSuccess {
     Action(CommandAction),
 }
 
+impl PrettyDebug for ReturnSuccess {
+    fn pretty(&self) -> DebugDocBuilder {
+        match self {
+            ReturnSuccess::Value(value) => b::typed("value", value.pretty()),
+            ReturnSuccess::DebugValue(value) => b::typed("debug value", value.pretty()),
+            ReturnSuccess::Action(action) => b::typed("action", action.pretty()),
+        }
+    }
+}
+
 pub type ReturnValue = Result<ReturnSuccess, ShellError>;
 
-impl FormatDebug for ReturnValue {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
+impl PrettyDebug for ReturnValue {
+    fn pretty(&self) -> DebugDocBuilder {
         match self {
-            Err(err) => write!(f, "{}", err.debug(source)),
-            Ok(ReturnSuccess::Value(v)) => write!(f, "{}", v.debug(source)),
-            Ok(ReturnSuccess::DebugValue(v)) => v.fmt_debug(f, source),
-            Ok(ReturnSuccess::Action(a)) => write!(f, "{}", a.debug(source)),
+            Result::Ok(v) => v.pretty(),
+            Result::Err(_) => b::error("error"),
         }
     }
 }
@@ -532,6 +523,29 @@ pub trait PerItemCommand: Send + Sync {
 pub enum Command {
     WholeStream(Arc<dyn WholeStreamCommand>),
     PerItem(Arc<dyn PerItemCommand>),
+}
+
+impl PrettyDebugWithSource for Command {
+    fn pretty_debug(&self, source: &str) -> DebugDocBuilder {
+        match self {
+            Command::WholeStream(command) => b::typed(
+                "whole stream command",
+                b::description(command.name())
+                    + b::space()
+                    + b::equals()
+                    + b::space()
+                    + command.signature().pretty_debug(source),
+            ),
+            Command::PerItem(command) => b::typed(
+                "per item command",
+                b::description(command.name())
+                    + b::space()
+                    + b::equals()
+                    + b::space()
+                    + command.signature().pretty_debug(source),
+            ),
+        }
+    }
 }
 
 impl std::fmt::Debug for Command {

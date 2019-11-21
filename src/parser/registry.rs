@@ -21,6 +21,21 @@ pub enum PositionalType {
     Optional(String, SyntaxShape),
 }
 
+impl PrettyDebug for PositionalType {
+    fn pretty(&self) -> DebugDocBuilder {
+        match self {
+            PositionalType::Mandatory(string, shape) => {
+                b::description(string) + b::delimit("(", shape.pretty(), ")").as_kind().group()
+            }
+            PositionalType::Optional(string, shape) => {
+                b::description(string)
+                    + b::operator("?")
+                    + b::delimit("(", shape.pretty(), ")").as_kind().group()
+            }
+        }
+    }
+}
+
 impl PositionalType {
     pub fn mandatory(name: &str, ty: SyntaxShape) -> PositionalType {
         PositionalType::Mandatory(name.to_string(), ty)
@@ -67,6 +82,24 @@ pub struct Signature {
     pub rest_positional: Option<(SyntaxShape, Description)>,
     pub named: IndexMap<String, (NamedType, Description)>,
     pub is_filter: bool,
+}
+
+impl PrettyDebugWithSource for Signature {
+    fn pretty_debug(&self, source: &str) -> DebugDocBuilder {
+        b::typed(
+            "signature",
+            b::description(&self.name)
+                + b::preceded(
+                    b::space(),
+                    b::intersperse(
+                        self.positional
+                            .iter()
+                            .map(|(ty, _)| ty.pretty_debug(source)),
+                        b::space(),
+                    ),
+                ),
+        )
+    }
 }
 
 impl Signature {

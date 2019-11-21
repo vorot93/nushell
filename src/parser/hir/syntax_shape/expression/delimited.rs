@@ -9,12 +9,12 @@ pub fn expand_delimited_square(
     span: Span,
     context: &ExpandContext,
 ) -> Result<hir::Expression, ParseError> {
-    let mut tokens = TokensIterator::new(&children, span, false);
+    let mut tokens = TokensIterator::new(&children, span, context.source.clone(), false);
 
     let list = expand_syntax(&ExpressionListShape, &mut tokens, context);
 
     Ok(hir::Expression::list(
-        list?.item,
+        list?.exprs.item,
         Tag { span, anchor: None },
     ))
 }

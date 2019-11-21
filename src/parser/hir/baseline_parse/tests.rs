@@ -102,10 +102,11 @@ fn parse_tokens<T: Eq + HasSpan + Clone + Debug + 'static>(
 ) {
     let tokens = b::token_list(tokens);
     let (tokens, source) = b::build(tokens);
+    let text = Text::from(source);
 
-    ExpandContext::with_empty(&Text::from(source), |context| {
+    ExpandContext::with_empty(&text, |context| {
         let tokens = tokens.expect_list();
-        let mut iterator = TokensIterator::all(tokens.item, tokens.span);
+        let mut iterator = TokensIterator::all(tokens.item, text.clone(), tokens.span);
 
         let expr = expand_syntax(&shape, &mut iterator, &context);
 

@@ -23,7 +23,7 @@ impl<T: Into<String>> Into<Description> for Spanned<T> {
 impl Description {
     fn into_label(self) -> Result<Label<Span>, String> {
         match self {
-            Description::Source(s) => Ok(Label::new_primary(s.span()).with_message(s.item)),
+            Description::Source(s) => Ok(Label::new_primary(s.span).with_message(s.item)),
             Description::Synthetic(s) => Err(s),
         }
     }
@@ -104,12 +104,6 @@ pub enum ArgumentError {
 pub struct ShellError {
     error: ProximateShellError,
     cause: Option<Box<ProximateShellError>>,
-}
-
-impl FormatDebug for ShellError {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
-        self.error.fmt_debug(f, source)
-    }
 }
 
 impl serde::de::Error for ShellError {
@@ -571,13 +565,6 @@ impl ProximateShellError {
     //         ProximateShellError::CoerceError { left, right } => left.tag.until(&right.tag),
     //     })
     // }
-}
-
-impl FormatDebug for ProximateShellError {
-    fn fmt_debug(&self, f: &mut DebugFormatter, _source: &str) -> fmt::Result {
-        // TODO: Custom debug for inner spans
-        write!(f, "{:?}", self)
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

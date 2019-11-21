@@ -224,6 +224,7 @@ impl TreeItem for TreeChild {
 #[derive(Debug, Clone)]
 pub struct ColorTracer {
     frame_stack: Vec<ColorFrame>,
+    source: Text,
 }
 
 impl ColorTracer {
@@ -234,7 +235,7 @@ impl ColorTracer {
         }
     }
 
-    pub fn new() -> ColorTracer {
+    pub fn new(source: Text) -> ColorTracer {
         let root = ColorFrame {
             description: "Trace",
             children: vec![],
@@ -243,6 +244,7 @@ impl ColorTracer {
 
         ColorTracer {
             frame_stack: vec![root],
+            source,
         }
     }
 

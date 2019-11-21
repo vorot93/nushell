@@ -743,7 +743,7 @@ fn classify_pipeline(
     source: &Text,
 ) -> Result<ClassifiedPipeline, ShellError> {
     let mut pipeline_list = vec![pipeline.clone()];
-    let mut iterator = TokensIterator::all(&mut pipeline_list, pipeline.span());
+    let mut iterator = TokensIterator::all(&mut pipeline_list, source.clone(), pipeline.span());
 
     let result = expand_syntax(
         &PipelineShape,
@@ -769,7 +769,7 @@ pub(crate) fn external_command(
     context: &ExpandContext,
     name: Tagged<&str>,
 ) -> Result<ClassifiedCommand, ParseError> {
-    let Spanned { item, span } = expand_syntax(&ExternalTokensShape, tokens, context)?;
+    let Spanned { item, span } = expand_syntax(&ExternalTokensShape, tokens, context)?.tokens;
 
     Ok(ClassifiedCommand::External(ExternalCommand {
         name: name.to_string(),

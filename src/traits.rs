@@ -1,8 +1,6 @@
 use crate::prelude::*;
 use derive_new::new;
-use getset::Getters;
 use pretty::{BoxAllocator, DocAllocator};
-use std::fmt::{self, Write};
 use std::hash::Hash;
 use termcolor::{Color, ColorSpec};
 
@@ -32,164 +30,8 @@ impl<T: ShellTypeName> SpannedTypeName for Tagged<T> {
     }
 }
 
-pub struct Debuggable<'a, T: FormatDebug> {
-    inner: &'a T,
-    source: &'a str,
-}
-
-impl FormatDebug for str {
-    fn fmt_debug(&self, f: &mut DebugFormatter, _source: &str) -> fmt::Result {
-        write!(f, "{}", self)
-    }
-}
-
-impl<T: ToDebug> fmt::Debug for Debuggable<'_, T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.inner.fmt_debug(
-            &mut DebugFormatter::new(
-                f,
-                ansi_term::Color::White.bold(),
-                ansi_term::Color::Black.bold(),
-            ),
-            self.source,
-        )
-    }
-}
-
-impl<T: ToDebug> fmt::Display for Debuggable<'_, T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.inner.fmt_display(
-            &mut DebugFormatter::new(
-                f,
-                ansi_term::Color::White.bold(),
-                ansi_term::Color::Black.bold(),
-            ),
-            self.source,
-        )
-    }
-}
-
 pub trait HasTag {
     fn tag(&self) -> Tag;
-}
-
-#[derive(Getters, new)]
-pub struct DebugFormatter<'me, 'args> {
-    formatter: &'me mut std::fmt::Formatter<'args>,
-    style: ansi_term::Style,
-    default_style: ansi_term::Style,
-}
-
-impl<'me, 'args> DebugFormatter<'me, 'args> {
-    pub fn say_simple(&mut self, kind: &str) -> std::fmt::Result {
-        write!(self, "{}", self.style.paint(kind))
-    }
-
-    pub fn say<'debuggable>(
-        &mut self,
-        kind: &str,
-        debuggable: Debuggable<'debuggable, impl FormatDebug>,
-    ) -> std::fmt::Result {
-        write!(self, "{}", self.style.paint(kind))?;
-        write!(self, "{}", self.default_style.paint(" "))?;
-        write!(
-            self,
-            "{}",
-            self.default_style.paint(format!("{}", debuggable))
-        )
-    }
-
-    pub fn say_str<'debuggable>(
-        &mut self,
-        kind: &str,
-        string: impl AsRef<str>,
-    ) -> std::fmt::Result {
-        write!(self, "{}", self.style.paint(kind))?;
-        write!(self, "{}", self.default_style.paint(" "))?;
-        write!(self, "{}", self.default_style.paint(string.as_ref()))
-    }
-
-    pub fn say_block(
-        &mut self,
-        kind: &str,
-        block: impl FnOnce(&mut Self) -> std::fmt::Result,
-    ) -> std::fmt::Result {
-        write!(self, "{}", self.style.paint(kind))?;
-        write!(self, "{}", self.default_style.paint(" "))?;
-        block(self)
-    }
-
-    pub fn say_list<T, U: IntoIterator<Item = T>>(
-        &mut self,
-        kind: &str,
-        list: U,
-        open: impl Fn(&mut Self) -> std::fmt::Result,
-        mut block: impl FnMut(&mut Self, &T) -> std::fmt::Result,
-        interleave: impl Fn(&mut Self) -> std::fmt::Result,
-        close: impl Fn(&mut Self) -> std::fmt::Result,
-    ) -> std::fmt::Result {
-        write!(self, "{}", self.style.paint(kind))?;
-        write!(self, "{}", self.default_style.paint(" "))?;
-        open(self)?;
-        write!(self, " ")?;
-
-        let mut list = list.into_iter();
-
-        let first = match list.next() {
-            None => return Ok(()),
-            Some(first) => first,
-        };
-
-        block(self, &first)?;
-
-        for item in list {
-            interleave(self)?;
-            block(self, &item)?;
-        }
-
-        write!(self, " ")?;
-        close(self)?;
-
-        Ok(())
-    }
-
-    pub fn say_dict<'debuggable>(
-        &mut self,
-        kind: &str,
-        dict: indexmap::IndexMap<&str, String>,
-    ) -> std::fmt::Result {
-        write!(self, "{}", self.style.paint(kind))?;
-        write!(self, "{}", self.default_style.paint(" "))?;
-
-        let last = dict.len() - 1;
-
-        for (i, (key, value)) in dict.into_iter().enumerate() {
-            write!(self, "{}", self.default_style.paint(key))?;
-            write!(self, "{}", self.default_style.paint("=["))?;
-            write!(self, "{}", self.style.paint(value))?;
-            write!(self, "{}", self.default_style.paint("]"))?;
-
-            if i != last {
-                write!(self, "{}", self.default_style.paint(" "))?;
-            }
-        }
-
-        Ok(())
-    }
-}
-
-impl<'a, 'b> std::fmt::Write for DebugFormatter<'a, 'b> {
-    fn write_str(&mut self, s: &str) -> std::fmt::Result {
-        self.formatter.write_str(s)
-    }
-
-    fn write_char(&mut self, c: char) -> std::fmt::Result {
-        self.formatter.write_char(c)
-    }
-
-    fn write_fmt(self: &mut Self, args: std::fmt::Arguments<'_>) -> std::fmt::Result {
-        self.formatter.write_fmt(args)
-    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Hash)]
@@ -200,6 +42,8 @@ pub enum ShellStyle {
     Equals,
     Kind,
     Keyword,
+    Operator,
+    Variable,
     Primitive,
     Opaque,
     Description,
@@ -226,7 +70,12 @@ impl From<ShellAnnotation> for ColorSpec {
                 .set_intense(true)
                 .clone(),
             ShellStyle::Kind => ColorSpec::new().set_fg(Some(Color::Cyan)).clone(),
+            ShellStyle::Variable => ColorSpec::new()
+                .set_fg(Some(Color::Green))
+                .set_intense(true)
+                .clone(),
             ShellStyle::Keyword => ColorSpec::new().set_fg(Some(Color::Magenta)).clone(),
+            ShellStyle::Operator => ColorSpec::new().set_fg(Some(Color::Yellow)).clone(),
             ShellStyle::Primitive => ColorSpec::new()
                 .set_fg(Some(Color::Green))
                 .set_intense(true)
@@ -277,7 +126,7 @@ pub struct DebugDocBuilder {
 }
 
 impl PrettyDebug for DebugDocBuilder {
-    fn pretty_debug(&self) -> DebugDocBuilder {
+    fn pretty(&self) -> DebugDocBuilder {
         self.clone()
     }
 }
@@ -333,8 +182,35 @@ impl DebugDocBuilder {
             .into()
     }
 
+    pub fn typed(kind: &str, value: DebugDocBuilder) -> DebugDocBuilder {
+        b::delimit("(", b::kind(kind) + b::space() + value.group(), ")").group()
+    }
+
+    pub fn subtyped(
+        kind: &str,
+        subkind: impl std::fmt::Display,
+        value: DebugDocBuilder,
+    ) -> DebugDocBuilder {
+        b::delimit(
+            "(",
+            (b::kind(kind) + b::delimit("[", b::kind(format!("{}", subkind)), "]")).group()
+                + b::space()
+                + value.group(),
+            ")",
+        )
+        .group()
+    }
+
     pub fn keyword(string: impl std::fmt::Display) -> DebugDocBuilder {
         DebugDocBuilder::styled(string, ShellStyle::Keyword)
+    }
+
+    pub fn var(string: impl std::fmt::Display) -> DebugDocBuilder {
+        DebugDocBuilder::styled(string, ShellStyle::Variable)
+    }
+
+    pub fn operator(string: impl std::fmt::Display) -> DebugDocBuilder {
+        DebugDocBuilder::styled(string, ShellStyle::Operator)
     }
 
     pub fn primitive(string: impl std::fmt::Display) -> DebugDocBuilder {
@@ -357,12 +233,60 @@ impl DebugDocBuilder {
         DebugDocBuilder::delimiter(start) + doc + DebugDocBuilder::delimiter(end)
     }
 
+    pub fn preceded(before: DebugDocBuilder, body: DebugDocBuilder) -> DebugDocBuilder {
+        if body.is_empty() {
+            body
+        } else {
+            before + body
+        }
+    }
+
+    pub fn surrounded_option(
+        before: Option<DebugDocBuilder>,
+        builder: Option<DebugDocBuilder>,
+        after: Option<DebugDocBuilder>,
+    ) -> DebugDocBuilder {
+        match builder {
+            None => DebugDocBuilder::blank(),
+            Some(b) => b::option(before) + b + b::option(after),
+        }
+    }
+
+    pub fn preceded_option(
+        before: Option<DebugDocBuilder>,
+        builder: Option<DebugDocBuilder>,
+    ) -> DebugDocBuilder {
+        DebugDocBuilder::surrounded_option(before, builder, None)
+    }
+
+    pub fn option(builder: Option<DebugDocBuilder>) -> DebugDocBuilder {
+        match builder {
+            None => DebugDocBuilder::blank(),
+            Some(b) => b,
+        }
+    }
+
     pub fn space() -> DebugDocBuilder {
         BoxAllocator.space().into()
     }
 
     pub fn newline() -> DebugDocBuilder {
         BoxAllocator.newline().into()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        match &self.inner.1 {
+            pretty::Doc::Nil => true,
+            _ => false,
+        }
+    }
+
+    pub fn or(self, doc: DebugDocBuilder) -> DebugDocBuilder {
+        if self.is_empty() {
+            doc
+        } else {
+            self
+        }
     }
 
     pub fn group(self) -> DebugDocBuilder {
@@ -373,11 +297,43 @@ impl DebugDocBuilder {
         self.inner.nest(1).group().into()
     }
 
-    pub fn intersperse(
-        list: impl IntoIterator<Item = DebugDocBuilder>,
+    pub fn intersperse_with_source<'a, T: PrettyDebugWithSource + 'a>(
+        list: impl IntoIterator<Item = &'a T>,
+        separator: DebugDocBuilder,
+        source: &str,
+    ) -> DebugDocBuilder {
+        BoxAllocator
+            .intersperse(
+                list.into_iter().filter_map(|item| {
+                    let item = item.pretty_debug(source);
+                    if item.is_empty() {
+                        None
+                    } else {
+                        Some(item)
+                    }
+                }),
+                separator,
+            )
+            .into()
+    }
+
+    pub fn intersperse<T: PrettyDebug>(
+        list: impl IntoIterator<Item = T>,
         separator: DebugDocBuilder,
     ) -> DebugDocBuilder {
-        BoxAllocator.intersperse(list, separator).into()
+        BoxAllocator
+            .intersperse(
+                list.into_iter().filter_map(|item| {
+                    let item = item.pretty();
+                    if item.is_empty() {
+                        None
+                    } else {
+                        Some(item)
+                    }
+                }),
+                separator,
+            )
+            .into()
     }
 
     pub fn list(list: impl IntoIterator<Item = DebugDocBuilder>) -> DebugDocBuilder {
@@ -411,21 +367,74 @@ pub struct DebugDoc {
     pub inner: PrettyDebugDoc,
 }
 
+pub trait PrettyDebugWithSource: Sized {
+    fn pretty_debug(&self, source: &str) -> DebugDocBuilder;
+
+    // This is a transitional convenience method
+    fn debug(&self, source: impl Into<Text>) -> String
+    where
+        Self: Clone,
+    {
+        self.clone().debuggable(source).display()
+    }
+
+    fn debuggable(self, source: impl Into<Text>) -> DebuggableWithSource<Self> {
+        DebuggableWithSource {
+            inner: self,
+            source: source.into(),
+        }
+    }
+}
+
+impl<T: PrettyDebug> PrettyDebugWithSource for T {
+    fn pretty_debug(&self, _source: &str) -> DebugDocBuilder {
+        self.pretty()
+    }
+}
+
+pub struct DebuggableWithSource<T: PrettyDebugWithSource> {
+    inner: T,
+    source: Text,
+}
+
+impl<T> PrettyDebug for DebuggableWithSource<T>
+where
+    T: PrettyDebugWithSource,
+{
+    fn pretty(&self) -> DebugDocBuilder {
+        self.inner.pretty_debug(&self.source)
+    }
+}
+
+impl PrettyDebug for DebugDoc {
+    fn pretty(&self) -> DebugDocBuilder {
+        DebugDocBuilder::new(BoxAllocator.nil().append(self.inner.clone()))
+    }
+}
+
 pub trait PrettyDebug {
-    fn pretty_debug(&self) -> DebugDocBuilder;
+    fn pretty(&self) -> DebugDocBuilder;
 
     fn to_doc(&self) -> DebugDoc {
-        DebugDoc::new(self.pretty_doc())
+        DebugDoc::new(self.pretty().into())
     }
 
     fn pretty_doc(&self) -> PrettyDebugDoc {
-        let builder = self.pretty_debug();
+        let builder = self.pretty();
         builder.inner.into()
     }
 
     fn pretty_builder(&self) -> PrettyDebugDocBuilder {
-        let doc = self.pretty_debug();
+        let doc = self.pretty();
         doc.inner
+    }
+
+    /// A convenience method that prints out the document without colors in
+    /// 70 columns. Generally, you should use plain_string or colored_string
+    /// if possible, but display() can be useful for trace lines and things
+    /// like that, where you don't have control over the terminal.
+    fn display(&self) -> String {
+        self.plain_string(70)
     }
 
     fn plain_string(&self, width: usize) -> String {
@@ -520,34 +529,4 @@ impl std::hash::Hash for DebugDoc {
 
 pub trait PrettyType {
     fn pretty_type(&self) -> DebugDocBuilder;
-}
-
-pub trait FormatDebug: std::fmt::Debug {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result;
-
-    fn fmt_display(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
-        self.fmt_debug(f, source)
-    }
-}
-
-pub trait ToDebug: Sized + FormatDebug {
-    fn debug<'a>(&'a self, source: &'a str) -> Debuggable<'a, Self>;
-}
-
-impl FormatDebug for Box<dyn FormatDebug> {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
-        (&**self).fmt_debug(f, source)
-    }
-}
-
-impl<T> ToDebug for T
-where
-    T: FormatDebug + Sized,
-{
-    fn debug<'a>(&'a self, source: &'a str) -> Debuggable<'a, Self> {
-        Debuggable {
-            inner: self,
-            source,
-        }
-    }
 }

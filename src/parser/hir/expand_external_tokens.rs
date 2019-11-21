@@ -9,20 +9,36 @@ use crate::parser::{
     hir::Expression,
     TokensIterator,
 };
-use crate::{DebugFormatter, FormatDebug, Span, Spanned, SpannedItem};
-use std::fmt;
+use crate::traits::{DebugDocBuilder, DebugDocBuilder as b, PrettyDebug};
+use crate::{HasSpan, Span, Spanned, SpannedItem};
+
+#[derive(Debug, Clone)]
+pub struct ExternalTokensSyntax {
+    pub tokens: Spanned<Vec<Spanned<String>>>,
+}
+
+impl HasSpan for ExternalTokensSyntax {
+    fn span(&self) -> Span {
+        self.tokens.span
+    }
+}
+
+impl PrettyDebug for ExternalTokensSyntax {
+    fn pretty(&self) -> DebugDocBuilder {
+        b::intersperse(
+            self.tokens
+                .iter()
+                .map(|token| b::primitive(format!("{:?}", token.item))),
+            b::space(),
+        )
+    }
+}
 
 #[derive(Debug, Copy, Clone)]
 pub struct ExternalTokensShape;
 
-impl FormatDebug for Spanned<Vec<Spanned<String>>> {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
-        FormatDebug::fmt_debug(&self.item, f, source)
-    }
-}
-
 impl ExpandSyntax for ExternalTokensShape {
-    type Output = Spanned<Vec<Spanned<String>>>;
+    type Output = ExternalTokensSyntax;
 
     fn name(&self) -> &'static str {
         "external command"
@@ -46,7 +62,9 @@ impl ExpandSyntax for ExternalTokensShape {
 
         let end = token_nodes.span_at_cursor();
 
-        Ok(out.spanned(start.until(end)))
+        Ok(ExternalTokensSyntax {
+            tokens: out.spanned(start.until(end)),
+        })
     }
 }
 

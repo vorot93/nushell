@@ -9,24 +9,32 @@ use nom::bytes::complete::tag;
 use nom::character::complete::digit1;
 use nom::combinator::{all_consuming, opt, value};
 use nom::IResult;
-use std::fmt;
+
+#[derive(Debug, Clone)]
+pub struct UnitSyntax {
+    pub unit: Spanned<(Spanned<RawNumber>, Spanned<Unit>)>,
+}
+
+impl PrettyDebugWithSource for UnitSyntax {
+    fn pretty_debug(&self, source: &str) -> DebugDocBuilder {
+        b::typed(
+            "unit",
+            self.unit.0.pretty_debug(source) + b::space() + self.unit.1.pretty_debug(source),
+        )
+    }
+}
+
+impl HasSpan for UnitSyntax {
+    fn span(&self) -> Span {
+        self.unit.span
+    }
+}
 
 #[derive(Debug, Copy, Clone)]
 pub struct UnitShape;
 
-impl FormatDebug for Spanned<(Spanned<RawNumber>, Spanned<Unit>)> {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
-        let dict = indexmap::indexmap! {
-            "number" => format!("{}", self.item.0.item.debug(source)),
-            "unit" => format!("{}", self.item.1.debug(source)),
-        };
-
-        f.say_dict("unit", dict)
-    }
-}
-
 impl ExpandSyntax for UnitShape {
-    type Output = Spanned<(Spanned<RawNumber>, Spanned<Unit>)>;
+    type Output = UnitSyntax;
 
     fn name(&self) -> &'static str {
         "unit"
@@ -36,7 +44,7 @@ impl ExpandSyntax for UnitShape {
         &self,
         token_nodes: &'b mut TokensIterator<'a>,
         context: &ExpandContext,
-    ) -> Result<Spanned<(Spanned<RawNumber>, Spanned<Unit>)>, ParseError> {
+    ) -> Result<UnitSyntax, ParseError> {
         let peeked = token_nodes.peek_any().not_eof("unit")?;
 
         let span = match peeked.node {
@@ -55,7 +63,9 @@ impl ExpandSyntax for UnitShape {
         };
 
         peeked.commit();
-        Ok((number, unit).spanned(*span))
+        Ok(UnitSyntax {
+            unit: (number, unit).spanned(*span),
+        })
     }
 }
 

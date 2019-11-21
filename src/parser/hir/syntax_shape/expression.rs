@@ -322,9 +322,13 @@ impl FallibleColorSyntax for AnyExpressionStartShape {
             ),
 
             AtomicToken::SquareDelimited { nodes, spans } => {
-                token_nodes.child((&nodes[..]).spanned(atom.span), |tokens| {
-                    color_delimited_square(spans, tokens, atom.span.into(), context);
-                });
+                token_nodes.child(
+                    (&nodes[..]).spanned(atom.span),
+                    context.source.clone(),
+                    |tokens| {
+                        color_delimited_square(spans, tokens, atom.span.into(), context);
+                    },
+                );
             }
 
             AtomicToken::Word { .. } | AtomicToken::Dot { .. } => {
@@ -469,7 +473,7 @@ impl ExpandSyntax for BareTailShape {
         loop {
             match expand_syntax(&BareShape, token_nodes, context) {
                 Ok(bare) => {
-                    end = Some(bare.span);
+                    end = Some(bare.word.span);
                     continue;
                 }
 

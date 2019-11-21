@@ -9,7 +9,7 @@ use crate::parser::{
     hir::{self, ExpandContext, NamedArguments},
     Flag,
 };
-use crate::traits::ToDebug;
+use crate::traits::PrettyDebugWithSource;
 use crate::{Span, Spanned, SpannedItem, Text};
 use log::trace;
 
@@ -622,7 +622,7 @@ pub fn trace_remaining(desc: &'static str, tail: &hir::TokensIterator<'_>, sourc
         itertools::join(
             tail.debug_remaining()
                 .iter()
-                .map(|i| format!("%{}%", i.debug(&source))),
+                .map(|i| format!("%{}%", i.debug(source))),
             " "
         )
     );

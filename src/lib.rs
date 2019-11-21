@@ -31,7 +31,7 @@ pub use crate::parser::hir::path::{ColumnPath, PathMember, RawPathMember};
 pub use crate::parser::hir::SyntaxShape;
 pub use crate::parser::parse::token_tree_builder::TokenTreeBuilder;
 pub use crate::plugin::{serve_plugin, Plugin};
-pub use crate::traits::{DebugFormatter, FormatDebug, ShellTypeName, SpannedTypeName, ToDebug};
+pub use crate::traits::{ShellTypeName, SpannedTypeName};
 pub use crate::utils::{did_you_mean, AbsoluteFile, AbsolutePath, RelativePath};
 pub use cli::cli;
 pub use data::base::{Primitive, Value};

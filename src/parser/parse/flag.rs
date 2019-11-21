@@ -1,4 +1,5 @@
 use crate::parser::hir::syntax_shape::flat_shape::FlatShape;
+use crate::prelude::*;
 use crate::{Span, Spanned, SpannedItem};
 use derive_new::new;
 use getset::Getters;
@@ -15,6 +16,17 @@ pub enum FlagKind {
 pub struct Flag {
     pub(crate) kind: FlagKind,
     pub(crate) name: Span,
+}
+
+impl PrettyDebugWithSource for Flag {
+    fn pretty_debug(&self, source: &str) -> DebugDocBuilder {
+        let prefix = match self.kind {
+            FlagKind::Longhand => b::description("--"),
+            FlagKind::Shorthand => b::description("-"),
+        };
+
+        prefix + b::description(self.name.slice(source))
+    }
 }
 
 impl Spanned<Flag> {

@@ -4,9 +4,7 @@ use bytes::{BufMut, BytesMut};
 use derive_new::new;
 use futures::stream::StreamExt;
 use futures_codec::{Decoder, Encoder, Framed};
-use itertools::Itertools;
 use log::{log_enabled, trace};
-use std::fmt;
 use std::io::{Error, ErrorKind};
 use subprocess::Exec;
 
@@ -79,12 +77,13 @@ pub(crate) struct ClassifiedPipeline {
     pub(crate) commands: Spanned<Vec<ClassifiedCommand>>,
 }
 
-impl FormatDebug for ClassifiedPipeline {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
-        f.say_str(
-            "classified pipeline",
-            self.commands.iter().map(|c| c.debug(source)).join(" | "),
+impl PrettyDebugWithSource for ClassifiedPipeline {
+    fn pretty_debug(&self, source: &str) -> DebugDocBuilder {
+        b::intersperse(
+            self.commands.iter().map(|c| c.pretty_debug(source)),
+            b::operator(" | "),
         )
+        .or(b::delimit("<", b::description("empty pipeline"), ">"))
     }
 }
 
@@ -98,19 +97,19 @@ impl HasSpan for ClassifiedPipeline {
 pub(crate) enum ClassifiedCommand {
     #[allow(unused)]
     Expr(TokenNode),
-    Internal(InternalCommand),
     #[allow(unused)]
     Dynamic(Spanned<hir::Call>),
+    Internal(InternalCommand),
     External(ExternalCommand),
 }
 
-impl FormatDebug for ClassifiedCommand {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
+impl PrettyDebugWithSource for ClassifiedCommand {
+    fn pretty_debug(&self, source: &str) -> DebugDocBuilder {
         match self {
-            ClassifiedCommand::Expr(expr) => expr.fmt_debug(f, source),
-            ClassifiedCommand::Internal(internal) => internal.fmt_debug(f, source),
-            ClassifiedCommand::Dynamic(dynamic) => dynamic.fmt_debug(f, source),
-            ClassifiedCommand::External(external) => external.fmt_debug(f, source),
+            ClassifiedCommand::Expr(token) => b::typed("command", token.pretty_debug(source)),
+            ClassifiedCommand::Dynamic(call) => b::typed("command", call.pretty_debug(source)),
+            ClassifiedCommand::Internal(internal) => internal.pretty_debug(source),
+            ClassifiedCommand::External(external) => external.pretty_debug(source),
         }
     }
 }
@@ -133,17 +132,20 @@ pub(crate) struct InternalCommand {
     pub(crate) args: Spanned<hir::Call>,
 }
 
+impl PrettyDebugWithSource for InternalCommand {
+    fn pretty_debug(&self, source: &str) -> DebugDocBuilder {
+        b::typed(
+            "internal command",
+            b::description(&self.name) + b::space() + self.args.pretty_debug(source),
+        )
+    }
+}
+
 impl HasSpan for InternalCommand {
     fn span(&self) -> Span {
         let start = self.name_tag.span;
 
         start.until(self.args.span)
-    }
-}
-
-impl FormatDebug for InternalCommand {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
-        f.say("internal", self.args.debug(source))
     }
 }
 
@@ -165,7 +167,8 @@ impl InternalCommand {
             trace!(target: "nu::run::internal", "{}", self.args.debug(&source));
         }
 
-        let objects: InputStream = trace_stream!(target: "nu::trace_stream::internal", source: source, "input" = input.objects);
+        let objects: InputStream =
+            trace_stream!(target: "nu::trace_stream::internal", "input" = input.objects);
 
         let command = context.expect_command(&self.name);
 
@@ -179,7 +182,7 @@ impl InternalCommand {
             )
         };
 
-        let result = trace_out_stream!(target: "nu::trace_stream::internal", source: source, "output" = result);
+        let result = trace_out_stream!(target: "nu::trace_stream::internal", "output" = result);
         let mut result = result.values;
         let mut context = context.clone();
 
@@ -283,16 +286,21 @@ pub(crate) struct ExternalCommand {
     pub(crate) args: Spanned<Vec<Tagged<String>>>,
 }
 
-impl FormatDebug for ExternalCommand {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
-        write!(f, "{}", self.name)?;
-
-        if self.args.item.len() > 0 {
-            write!(f, " ")?;
-            write!(f, "{}", self.args.iter().map(|i| i.debug(source)).join(" "))?;
-        }
-
-        Ok(())
+impl PrettyDebug for ExternalCommand {
+    fn pretty(&self) -> DebugDocBuilder {
+        b::typed(
+            "external command",
+            b::description(&self.name)
+                + b::preceded(
+                    b::space(),
+                    b::intersperse(
+                        self.args
+                            .iter()
+                            .map(|a| b::primitive(format!("{}", a.item))),
+                        b::space(),
+                    ),
+                ),
+        )
     }
 }
 

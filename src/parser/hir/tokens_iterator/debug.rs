@@ -7,7 +7,8 @@ pub(crate) use self::color_trace::*;
 pub(crate) use self::expand_trace::*;
 
 use crate::parser::hir::tokens_iterator::TokensIteratorState;
-use crate::traits::ToDebug;
+use crate::traits::{PrettyDebug, PrettyDebugWithSource};
+use crate::Text;
 
 #[derive(Debug)]
 pub(crate) enum DebugIteratorToken {

@@ -103,7 +103,7 @@ impl TypeShape {
 }
 
 impl PrettyDebug for TypeShape {
-    fn pretty_debug(&self) -> DebugDocBuilder {
+    fn pretty(&self) -> DebugDocBuilder {
         match self {
             TypeShape::Nothing => ty("nothing"),
             TypeShape::Int => ty("integer"),
@@ -127,7 +127,7 @@ impl PrettyDebug for TypeShape {
                         (b::key(match key {
                             Column::String(string) => string.clone(),
                             Column::Value => "<value>".to_string(),
-                        }) + b::delimit("(", ty.pretty_debug(), ")").as_kind())
+                        }) + b::delimit("(", ty.pretty(), ")").as_kind())
                         .nest()
                     }),
                     b::space(),
@@ -185,11 +185,11 @@ struct DebugEntry<'a> {
 }
 
 impl<'a> PrettyDebug for DebugEntry<'a> {
-    fn pretty_debug(&self) -> DebugDocBuilder {
+    fn pretty(&self) -> DebugDocBuilder {
         (b::key(match self.key {
             Column::String(string) => string.clone(),
             Column::Value => format!("<value>"),
-        }) + b::delimit("(", self.value.pretty_debug(), ")").as_kind())
+        }) + b::delimit("(", self.value.pretty(), ")").as_kind())
     }
 }
 
@@ -297,7 +297,7 @@ impl InlineShape {
 }
 
 impl PrettyDebug for FormatInlineShape {
-    fn pretty_debug(&self) -> DebugDocBuilder {
+    fn pretty(&self) -> DebugDocBuilder {
         let column = &self.column;
 
         match &self.shape {
@@ -322,10 +322,9 @@ impl PrettyDebug for FormatInlineShape {
                 }
             }
             InlineShape::String(string) => b::primitive(format!("{}", string)),
-            InlineShape::ColumnPath(path) => b::intersperse(
-                path.iter().map(|member| member.pretty_debug()),
-                b::keyword("."),
-            ),
+            InlineShape::ColumnPath(path) => {
+                b::intersperse(path.iter().map(|member| member.pretty()), b::keyword("."))
+            }
             InlineShape::Pattern(pattern) => b::primitive(pattern),
             InlineShape::Boolean(boolean) => b::primitive(match (boolean, column) {
                 (true, None) => format!("Yes"),

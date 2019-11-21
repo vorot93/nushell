@@ -2,53 +2,6 @@ use crate::data::base::Primitive;
 use crate::prelude::*;
 use crate::traits::DebugDocBuilder as b;
 use pretty::{BoxAllocator, DocAllocator};
-use std::fmt;
-
-impl FormatDebug for Tagged<Value> {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
-        match &self.item {
-            Value::Primitive(p) => p.fmt_debug(f, source),
-            Value::Row(row) => f.say_dict(
-                "row",
-                row.entries()
-                    .iter()
-                    .map(|(key, value)| (&key[..], format!("{}", value.debug(source))))
-                    .collect(),
-            ),
-            Value::Table(table) => f.say_list(
-                "table",
-                table,
-                |f| write!(f, "["),
-                |f, item| write!(f, "{}", item.debug(source)),
-                |f| write!(f, " "),
-                |f| write!(f, "]"),
-            ),
-            Value::Error(_) => f.say_simple("error"),
-            Value::Block(_) => f.say_simple("block"),
-        }
-    }
-}
-
-impl FormatDebug for Primitive {
-    fn fmt_debug(&self, f: &mut DebugFormatter, _source: &str) -> fmt::Result {
-        match self {
-            Primitive::Nothing => write!(f, "Nothing"),
-            Primitive::BeginningOfStream => write!(f, "BeginningOfStream"),
-            Primitive::EndOfStream => write!(f, "EndOfStream"),
-            Primitive::Int(int) => write!(f, "{}", int),
-            Primitive::Duration(duration) => write!(f, "{} seconds", *duration),
-            Primitive::Path(path) => write!(f, "{}", path.display()),
-            Primitive::Decimal(decimal) => write!(f, "{}", decimal),
-            Primitive::Bytes(bytes) => write!(f, "{}", bytes),
-            Primitive::Pattern(string) => write!(f, "{:?}", string),
-            Primitive::String(string) => write!(f, "{:?}", string),
-            Primitive::ColumnPath(path) => write!(f, "{:?}", path),
-            Primitive::Boolean(boolean) => write!(f, "{}", boolean),
-            Primitive::Date(date) => write!(f, "{}", date),
-            Primitive::Binary(binary) => write!(f, "{:?}", binary),
-        }
-    }
-}
 
 impl PrettyType for Primitive {
     fn pretty_type(&self) -> DebugDocBuilder {
@@ -72,14 +25,14 @@ impl PrettyType for Primitive {
 }
 
 impl PrettyDebug for Primitive {
-    fn pretty_debug(&self) -> DebugDocBuilder {
+    fn pretty(&self) -> DebugDocBuilder {
         match self {
             Primitive::Nothing => b::primitive("nothing"),
             Primitive::Int(int) => prim(format_args!("{}", int)),
             Primitive::Decimal(decimal) => prim(format_args!("{}", decimal)),
             Primitive::Bytes(bytes) => primitive_doc(bytes, "bytesize"),
             Primitive::String(string) => prim(string),
-            Primitive::ColumnPath(path) => path.pretty_debug(),
+            Primitive::ColumnPath(path) => path.pretty(),
             Primitive::Pattern(pattern) => primitive_doc(pattern, "pattern"),
             Primitive::Boolean(boolean) => match boolean {
                 true => b::primitive("$yes"),
@@ -96,9 +49,9 @@ impl PrettyDebug for Primitive {
 }
 
 impl PrettyDebug for Value {
-    fn pretty_debug(&self) -> DebugDocBuilder {
+    fn pretty(&self) -> DebugDocBuilder {
         match self {
-            Value::Primitive(p) => p.pretty_debug(),
+            Value::Primitive(p) => p.pretty(),
             Value::Row(row) => row.pretty_builder().nest(1).group().into(),
             Value::Table(table) => BoxAllocator
                 .text("[")

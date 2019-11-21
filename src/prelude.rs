@@ -23,13 +23,11 @@ macro_rules! stream {
 
 #[macro_export]
 macro_rules! trace_stream {
-    (target: $target:tt, source: $source:expr, $desc:tt = $expr:expr) => {{
+    (target: $target:tt, $desc:tt = $expr:expr) => {{
         if log::log_enabled!(target: $target, log::Level::Trace) {
             use futures::stream::StreamExt;
-            let source = $source.clone();
-
             let objects = $expr.values.inspect(move |o| {
-                trace!(target: $target, "{} = {}", $desc, o.debug(&source));
+                trace!(target: $target, "{} = {}", $desc, o.plain_string(70));
             });
 
             $crate::stream::InputStream::from_stream(objects.boxed())
@@ -41,14 +39,12 @@ macro_rules! trace_stream {
 
 #[macro_export]
 macro_rules! trace_out_stream {
-    (target: $target:tt, source: $source:expr, $desc:tt = $expr:expr) => {{
+    (target: $target:tt, $desc:tt = $expr:expr) => {{
         if log::log_enabled!(target: $target, log::Level::Trace) {
             use futures::stream::StreamExt;
 
-            let source = $source.clone();
-
             let objects = $expr.values.inspect(move |o| {
-                trace!(target: $target, "{} = {}", $desc, o.debug(&source));
+                trace!(target: $target, "{} = {}", $desc, o.display());
             });
 
             $crate::stream::OutputStream::new(objects)
@@ -117,8 +113,8 @@ pub(crate) use crate::shell::shell_manager::ShellManager;
 pub(crate) use crate::shell::value_shell::ValueShell;
 pub(crate) use crate::stream::{InputStream, OutputStream};
 pub(crate) use crate::traits::{
-    DebugDoc, DebugDocBuilder, DebugFormatter, FormatDebug, HasTag, PrettyDebug, PrettyType,
-    ShellTypeName, SpannedTypeName, ToDebug,
+    DebugDoc, DebugDocBuilder, DebugDocBuilder as b, HasTag, PrettyDebug, PrettyDebugWithSource,
+    PrettyType, ShellTypeName, SpannedTypeName,
 };
 pub(crate) use crate::Text;
 pub(crate) use async_stream::stream as async_stream;
@@ -130,7 +126,6 @@ pub(crate) use num_traits::cast::{FromPrimitive, ToPrimitive};
 pub(crate) use num_traits::identities::Zero;
 pub(crate) use serde::Deserialize;
 pub(crate) use std::collections::VecDeque;
-pub(crate) use std::fmt::Write;
 pub(crate) use std::future::Future;
 pub(crate) use std::sync::{Arc, Mutex};
 

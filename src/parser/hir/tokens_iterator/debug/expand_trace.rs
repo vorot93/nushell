@@ -10,7 +10,7 @@ use std::io;
 pub enum FrameChild {
     Expr(Expression),
     Frame(ExprFrame),
-    Result(Box<dyn FormatDebug>),
+    Result(DebugDoc),
 }
 
 impl FrameChild {
@@ -31,7 +31,7 @@ impl FrameChild {
         match self {
             FrameChild::Expr(expr) => TreeChild::OkExpr(expr.clone(), text.clone()),
             FrameChild::Result(result) => {
-                let result = format!("{}", result.debug(text));
+                let result = format!("{}", result.display());
                 TreeChild::OkNonExpr(result)
             }
             FrameChild::Frame(frame) => {
@@ -88,8 +88,8 @@ impl ExprFrame {
         self.children.push(FrameChild::Expr(expr))
     }
 
-    fn add_result(&mut self, result: Box<dyn FormatDebug>) {
-        self.children.push(FrameChild::Result(result))
+    fn add_result(&mut self, result: impl PrettyDebug) {
+        self.children.push(FrameChild::Result(result.to_doc()))
     }
 }
 
@@ -253,6 +253,7 @@ impl TreeItem for TreeChild {
 #[derive(Debug)]
 pub struct ExpandTracer {
     frame_stack: Vec<ExprFrame>,
+    source: Text,
 }
 
 impl ExpandTracer {
@@ -267,7 +268,7 @@ impl ExpandTracer {
         PrintTracer { root, source }
     }
 
-    pub fn new() -> ExpandTracer {
+    pub fn new(source: Text) -> ExpandTracer {
         let root = ExprFrame {
             description: "Trace",
             children: vec![],
@@ -276,6 +277,7 @@ impl ExpandTracer {
 
         ExpandTracer {
             frame_stack: vec![root],
+            source,
         }
     }
 
@@ -312,8 +314,9 @@ impl ExpandTracer {
         self.current_frame().add_expr(shape);
     }
 
-    pub fn add_result(&mut self, result: Box<dyn FormatDebug>) {
-        self.current_frame().add_result(result);
+    pub fn add_result(&mut self, result: impl PrettyDebugWithSource) {
+        let source = self.source.clone();
+        self.current_frame().add_result(result.debuggable(source));
     }
 
     pub fn success(&mut self) {

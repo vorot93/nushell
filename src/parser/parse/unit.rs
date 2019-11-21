@@ -1,7 +1,7 @@
 use crate::data::base::Value;
 use crate::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::fmt;
+
 use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
@@ -24,16 +24,16 @@ pub enum Unit {
     Year,
 }
 
+impl PrettyDebug for Unit {
+    fn pretty(&self) -> DebugDocBuilder {
+        b::keyword(format!("{:?}", self))
+    }
+}
+
 fn convert_number_to_u64(number: &Number) -> u64 {
     match number {
         Number::Int(big_int) => big_int.to_u64().unwrap(),
         Number::Decimal(big_decimal) => big_decimal.to_u64().unwrap(),
-    }
-}
-
-impl FormatDebug for Spanned<Unit> {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
-        write!(f, "{}", self.span.slice(source))
     }
 }
 

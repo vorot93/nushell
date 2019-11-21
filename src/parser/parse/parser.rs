@@ -84,6 +84,15 @@ pub enum Number {
     Decimal(BigDecimal),
 }
 
+impl PrettyDebug for Number {
+    fn pretty(&self) -> DebugDocBuilder {
+        match self {
+            Number::Int(int) => b::primitive(int),
+            Number::Decimal(decimal) => b::primitive(decimal),
+        }
+    }
+}
+
 impl std::fmt::Display for Number {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

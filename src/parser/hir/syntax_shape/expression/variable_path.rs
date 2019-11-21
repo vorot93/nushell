@@ -8,7 +8,6 @@ use crate::parser::hir::syntax_shape::{
 use crate::parser::{hir, hir::Expression, hir::TokensIterator, Operator, RawNumber, RawToken};
 use crate::prelude::*;
 use serde::Serialize;
-use std::fmt;
 use std::str::FromStr;
 
 #[derive(Debug, Copy, Clone)]
@@ -207,21 +206,25 @@ impl FallibleColorSyntax for PathTailShape {
     }
 }
 
-impl FormatDebug for Spanned<Vec<PathMember>> {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
-        f.say_list(
-            "path tail",
-            &self.item,
-            |f| write!(f, "["),
-            |f, item| write!(f, "{}", item.debug(source)),
-            |f| write!(f, " "),
-            |f| write!(f, "]"),
-        )
+#[derive(Debug, Clone)]
+pub struct PathTailSyntax {
+    pub tail: Spanned<Vec<PathMember>>,
+}
+
+impl HasSpan for PathTailSyntax {
+    fn span(&self) -> Span {
+        self.tail.span
+    }
+}
+
+impl PrettyDebug for PathTailSyntax {
+    fn pretty(&self) -> DebugDocBuilder {
+        b::typed("tail", b::intersperse(self.tail.iter(), b::space()))
     }
 }
 
 impl ExpandSyntax for PathTailShape {
-    type Output = Spanned<Vec<PathMember>>;
+    type Output = PathTailSyntax;
 
     fn name(&self) -> &'static str {
         "path continuation"
@@ -253,7 +256,9 @@ impl ExpandSyntax for PathTailShape {
                 token_nodes.typed_span_at_cursor(),
             )),
 
-            Some(end) => Ok(tail.spanned(end)),
+            Some(end) => Ok(PathTailSyntax {
+                tail: tail.spanned(end),
+            }),
         }
     }
 }
@@ -264,14 +269,14 @@ pub enum ExpressionContinuation {
     InfixSuffix(Spanned<Operator>, Expression),
 }
 
-impl FormatDebug for ExpressionContinuation {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
+impl PrettyDebugWithSource for ExpressionContinuation {
+    fn pretty_debug(&self, source: &str) -> DebugDocBuilder {
         match self {
-            ExpressionContinuation::DotSuffix(dot, rest) => {
-                f.say_str("dot suffix", dot.until(rest.span).slice(source))
+            ExpressionContinuation::DotSuffix(_, suffix) => {
+                b::operator(".") + suffix.pretty_debug(source)
             }
-            ExpressionContinuation::InfixSuffix(operator, expr) => {
-                f.say_str("infix suffix", operator.span.until(expr.span).slice(source))
+            ExpressionContinuation::InfixSuffix(op, expr) => {
+                op.pretty_debug(source) + b::space() + expr.pretty_debug(source)
             }
         }
     }
@@ -318,10 +323,10 @@ impl ExpandSyntax for ExpressionContinuationShape {
 
             // Otherwise, we expect an infix operator and an expression next
             Err(_) => {
-                let (_, op, _) = expand_syntax(&InfixShape, token_nodes, context)?.item;
+                let (_, op, _) = expand_syntax(&InfixShape, token_nodes, context)?.infix.item;
                 let next = expand_expr(&AnyExpressionShape, token_nodes, context)?;
 
-                Ok(ExpressionContinuation::InfixSuffix(op, next))
+                Ok(ExpressionContinuation::InfixSuffix(op.operator, next))
             }
         }
     }
@@ -568,12 +573,12 @@ impl Member {
     }
 }
 
-impl FormatDebug for Member {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
+impl PrettyDebugWithSource for Member {
+    fn pretty_debug(&self, source: &str) -> DebugDocBuilder {
         match self {
-            Member::String(outer, _) => write!(f, "{}", outer.slice(source)),
-            Member::Int(_, int) => write!(f, "{}", int.slice(source)),
-            Member::Bare(bare) => write!(f, "{}", bare.slice(source)),
+            Member::String(outer, _) => b::value(outer.slice(source)),
+            Member::Int(int, _) => b::value(format!("{}", int)),
+            Member::Bare(span) => b::value(span.slice(source)),
         }
     }
 }
@@ -794,14 +799,31 @@ impl FallibleColorSyntax for ColumnPathShape {
     }
 }
 
-impl FormatDebug for Tagged<Vec<Member>> {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
-        self.item.fmt_debug(f, source)
+#[derive(Debug, Clone)]
+pub struct ColumnPathSyntax {
+    pub path: Tagged<Vec<Member>>,
+}
+
+impl HasSpan for ColumnPathSyntax {
+    fn span(&self) -> Span {
+        self.path.tag.span
+    }
+}
+
+impl PrettyDebugWithSource for ColumnPathSyntax {
+    fn pretty_debug(&self, source: &str) -> DebugDocBuilder {
+        b::typed(
+            "column path",
+            b::intersperse(
+                self.path.iter().map(|member| member.pretty_debug(source)),
+                b::space(),
+            ),
+        )
     }
 }
 
 impl ExpandSyntax for ColumnPathShape {
-    type Output = Tagged<Vec<Member>>;
+    type Output = ColumnPathSyntax;
 
     fn name(&self) -> &'static str {
         "column path"
@@ -812,7 +834,9 @@ impl ExpandSyntax for ColumnPathShape {
         token_nodes: &'b mut TokensIterator<'a>,
         context: &ExpandContext,
     ) -> Result<Self::Output, ParseError> {
-        Ok(expand_column_path(token_nodes, context)?)
+        Ok(ColumnPathSyntax {
+            path: expand_column_path(token_nodes, context)?,
+        })
     }
 }
 
@@ -1181,14 +1205,25 @@ impl FallibleColorSyntax for InfixShape {
     }
 }
 
-impl FormatDebug for Spanned<(Span, Spanned<Operator>, Span)> {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
-        f.say_str("operator", self.item.1.span.slice(source))
+#[derive(Debug, Clone)]
+pub struct InfixSyntax {
+    infix: Spanned<(Span, InfixInnerSyntax, Span)>,
+}
+
+impl HasSpan for InfixSyntax {
+    fn span(&self) -> Span {
+        self.infix.span
+    }
+}
+
+impl PrettyDebugWithSource for InfixSyntax {
+    fn pretty_debug(&self, source: &str) -> DebugDocBuilder {
+        self.infix.1.pretty_debug(source)
     }
 }
 
 impl ExpandSyntax for InfixShape {
-    type Output = Spanned<(Span, Spanned<Operator>, Span)>;
+    type Output = InfixSyntax;
 
     fn name(&self) -> &'static str {
         "infix operator"
@@ -1212,21 +1247,34 @@ impl ExpandSyntax for InfixShape {
 
         checkpoint.commit();
 
-        Ok((start, operator, end).spanned(start.until(end)))
+        Ok(InfixSyntax {
+            infix: (start, operator, end).spanned(start.until(end)),
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct InfixInnerSyntax {
+    pub operator: Spanned<Operator>,
+}
+
+impl HasSpan for InfixInnerSyntax {
+    fn span(&self) -> Span {
+        self.operator.span
+    }
+}
+
+impl PrettyDebug for InfixInnerSyntax {
+    fn pretty(&self) -> DebugDocBuilder {
+        self.operator.pretty()
     }
 }
 
 #[derive(Debug, Copy, Clone)]
 pub struct InfixInnerShape;
 
-impl FormatDebug for Spanned<Operator> {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
-        f.say_str("operator", self.span.slice(source))
-    }
-}
-
 impl ExpandSyntax for InfixInnerShape {
-    type Output = Spanned<Operator>;
+    type Output = InfixInnerSyntax;
 
     fn name(&self) -> &'static str {
         "infix inner"
@@ -1240,9 +1288,9 @@ impl ExpandSyntax for InfixInnerShape {
         parse_single_node(token_nodes, "infix operator", |token, token_span, err| {
             Ok(match token {
                 // If it's an operator (and not `.`), it's a match
-                RawToken::Operator(operator) if operator != Operator::Dot => {
-                    operator.spanned(token_span)
-                }
+                RawToken::Operator(operator) if operator != Operator::Dot => InfixInnerSyntax {
+                    operator: operator.spanned(token_span),
+                },
 
                 // Otherwise, it's not a match
                 _ => return Err(err.error()),

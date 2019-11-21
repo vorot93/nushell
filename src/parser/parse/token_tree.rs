@@ -1,7 +1,6 @@
 use crate::errors::{ParseError, ShellError};
 use crate::parser::parse::{call_node::*, flag::*, operator::*, pipeline::*, tokens::*};
 use crate::prelude::*;
-use crate::traits::ToDebug;
 use crate::{Tagged, Text};
 use derive_new::new;
 use getset::Getters;
@@ -21,15 +20,30 @@ pub enum TokenNode {
     Error(Spanned<ShellError>),
 }
 
-impl HasSpan for TokenNode {
-    fn span(&self) -> Span {
-        self.get_span()
+impl PrettyDebugWithSource for TokenNode {
+    fn pretty_debug(&self, source: &str) -> DebugDocBuilder {
+        match self {
+            TokenNode::Token(token) => token.pretty_debug(source),
+            TokenNode::Call(call) => call.pretty_debug(source),
+            TokenNode::Nodes(nodes) => b::intersperse(
+                nodes.iter().map(|node| node.pretty_debug(source)),
+                b::space(),
+            ),
+            TokenNode::Delimited(delimited) => delimited.pretty_debug(source),
+            TokenNode::Pipeline(pipeline) => pipeline.pretty_debug(source),
+            TokenNode::Flag(flag) => flag.pretty_debug(source),
+            TokenNode::Whitespace(space) => b::typed(
+                "whitespace",
+                b::description(format!("{:?}", space.slice(source))),
+            ),
+            TokenNode::Error(_) => b::error("error"),
+        }
     }
 }
 
-impl FormatDebug for TokenNode {
-    fn fmt_debug(&self, f: &mut DebugFormatter, source: &str) -> fmt::Result {
-        write!(f, "{:?}", self.old_debug(&Text::from(source)))
+impl HasSpan for TokenNode {
+    fn span(&self) -> Span {
+        self.get_span()
     }
 }
 
@@ -294,6 +308,19 @@ pub struct DelimitedNode {
     pub(crate) delimiter: Delimiter,
     pub(crate) spans: (Span, Span),
     pub(crate) children: Vec<TokenNode>,
+}
+
+impl PrettyDebugWithSource for DelimitedNode {
+    fn pretty_debug(&self, source: &str) -> DebugDocBuilder {
+        b::delimit(
+            self.delimiter.open(),
+            b::intersperse(
+                self.children.iter().map(|child| child.pretty_debug(source)),
+                b::space(),
+            ),
+            self.delimiter.close(),
+        )
+    }
 }
 
 impl DelimitedNode {

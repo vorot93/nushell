@@ -444,13 +444,13 @@ impl Value {
     }
 
     pub(crate) fn format_leaf(&self) -> DebugDocBuilder {
-        InlineShape::from_value(self).format().pretty_debug()
+        InlineShape::from_value(self).format().pretty()
     }
 
     pub(crate) fn format_for_column(&self, column: impl Into<Column>) -> DebugDocBuilder {
         InlineShape::from_value(self)
             .format_for_column(column)
-            .pretty_debug()
+            .pretty()
     }
 
     pub(crate) fn style_leaf(&self) -> &'static str {
