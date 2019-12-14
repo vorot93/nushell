@@ -1,3 +1,4 @@
+use derive_new::new;
 use nu_source::{b, DebugDocBuilder, HasSpan, PrettyDebug, Span, Tag};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -14,7 +15,7 @@ impl std::ops::Deref for ExternalArg {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, new)]
 pub struct ExternalArgs {
     pub list: Vec<ExternalArg>,
     pub span: Span,
@@ -34,7 +35,7 @@ impl std::ops::Deref for ExternalArgs {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, new)]
 pub struct ExternalCommand {
     pub name: String,
 
