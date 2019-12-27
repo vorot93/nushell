@@ -65,24 +65,9 @@ mod pipeline {
         fn as_home_directory_when_passed_as_argument_and_begins_with_tilde_to_an_external() {
             let actual = nu!(
                 cwd: std::path::PathBuf::from("."),
+                // ~ is expanded by `sh`
                 r#"
                     sh -c "echo ~"
-                "#
-            );
-
-            assert!(
-                !actual.contains("~"),
-                format!("'{}' should not contain ~", actual)
-            );
-        }
-
-        #[cfg(windows)]
-        #[test]
-        fn as_home_directory_when_passed_as_argument_and_begins_with_tilde_to_an_external() {
-            let actual = nu!(
-                cwd: std::path::PathBuf::from("."),
-                r#"
-                    cmd /c "echo ~"
                 "#
             );
 
