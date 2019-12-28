@@ -1,7 +1,5 @@
-use futures::executor::block_on;
-//use futures::stream::TryStreamExt;
+use tokio::prelude::{StreamExt, *};
 
-use futures_util::{StreamExt, TryStreamExt};
 use heim::process::{self as process, Process, ProcessResult};
 use heim::units::{information, ratio, Ratio};
 use std::usize;
@@ -24,7 +22,7 @@ impl Ps {
 
 async fn usage(process: Process) -> ProcessResult<(process::Process, Ratio, process::Memory)> {
     let usage_1 = process.cpu_usage().await?;
-    futures_timer::Delay::new(Duration::from_millis(100)).await;
+    tokio::time::delay_for(Duration::from_millis(100)).await;
     let usage_2 = process.cpu_usage().await?;
 
     let memory = process.memory().await?;
@@ -78,7 +76,9 @@ impl Plugin for Ps {
     }
 
     fn begin_filter(&mut self, callinfo: CallInfo) -> Result<Vec<ReturnValue>, ShellError> {
-        Ok(block_on(ps(callinfo.name_tag))
+        Ok(tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(ps(callinfo.name_tag))
             .into_iter()
             .map(ReturnSuccess::value)
             .collect())
